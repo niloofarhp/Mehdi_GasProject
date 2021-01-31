@@ -88,7 +88,7 @@ class BaseLearner(ABC):
     def load(self, model, in_path, ignore_fc=False, fill_dim=False):
         if model is not None and in_path is not None:
             self.log("Load model weights from " + in_path)
-            sd_loaded = torch.load(in_path, map_location=torch.device('cpu'))
+            sd_loaded = torch.load(in_path)
             if "state_dict" in sd_loaded:
                 sd_loaded = sd_loaded["state_dict"]
             sd_model = model.state_dict()
