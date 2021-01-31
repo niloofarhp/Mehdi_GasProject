@@ -12,8 +12,8 @@ class GasEmitDetect:
     def __init__(self, model_addr):
 
         # I3dLearner Configurations
-        use_cuda = False
-        parallel = False
+        use_cuda = True
+        parallel = True
         rank = 0
         world_size = 1
 
