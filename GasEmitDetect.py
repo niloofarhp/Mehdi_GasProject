@@ -12,8 +12,8 @@ class GasEmitDetect:
     def __init__(self, model_addr):
 
         # I3dLearner Configurations
-        use_cuda = True
-        parallel = True
+        use_cuda = False
+        parallel = False
         rank = 0
         world_size = 1
 
@@ -69,6 +69,7 @@ class GasEmitDetect:
         nf_ovl = int(nf / 2)    # nf overlap
 
         smoke_check_frame = 224
+        rgb_4d_smoke_hist = None
         gas_emit_report = []
 
 
@@ -78,7 +79,7 @@ class GasEmitDetect:
 
         rgb_4d = np.zeros((nf, height, width, 3), dtype=np.float32)
         all_frames = np.zeros((nf, height, width, 3), dtype=np.uint8)
-        frame_act_3d = np.zeros([nf, height, width])        
+        frame_act_3d = np.zeros([nf, height, width])
 
         for org_frm in range(0, int(num_frame - nf - nf_ovl), nf - nf_ovl):
 
@@ -181,6 +182,8 @@ class GasEmitDetect:
                 for f in range(frm_offset_write, frm_offset_write + frm_count_write, 1):
 
                     if calc_flow_rate:
+                        if rgb_4d_smoke_hist is None:
+                            rgb_4d_smoke_hist = rgb_4d_smoke[f]
                         rgb_4d_smoke_hist = rgb_4d_smoke_hist * 0.95 + rgb_4d_smoke[f] * 0.05
                         merge_res = gfl.ClacGasFlowRate(all_frames[f], np.uint8(rgb_4d_smoke_hist))
                     else:
