@@ -81,7 +81,7 @@ class GasEmitDetect:
         frame_act_3d = np.zeros([nf, height, width])
         rgb_4d_smoke = np.zeros([nf, height, width, 3], dtype=np.uint8)
 
-        for org_frm in range(0, int(num_frame - nf + nf_ovl), nf - nf_ovl):
+        for org_frm in range(0, int(num_frame - nf - nf_ovl), nf - nf_ovl):
 
             for f in range(nf):
                 if (org_frm != 0) and (f < nf_ovl):
