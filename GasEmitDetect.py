@@ -78,8 +78,7 @@ class GasEmitDetect:
 
         rgb_4d = np.zeros((nf, height, width, 3), dtype=np.float32)
         all_frames = np.zeros((nf, height, width, 3), dtype=np.uint8)
-        frame_act_3d = np.zeros([nf, height, width])
-        rgb_4d_smoke = np.zeros([nf, height, width, 3], dtype=np.uint8)
+        frame_act_3d = np.zeros([nf, height, width])        
 
         for org_frm in range(0, int(num_frame - nf - nf_ovl), nf - nf_ovl):
 
@@ -116,6 +115,7 @@ class GasEmitDetect:
             smoke_thr = 0.6
             activation_thr = 0.85
 
+            rgb_4d_smoke = np.zeros([nf, height, width, 3], dtype=np.uint8)
 
             w_step = int(np.ceil(1.4 * width / smoke_check_frame))
             h_step = int(np.ceil(1.4 * height / smoke_check_frame))
