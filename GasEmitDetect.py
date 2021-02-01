@@ -12,8 +12,8 @@ class GasEmitDetect:
     def __init__(self, model_addr):
 
         # I3dLearner Configurations
-        use_cuda = False
-        parallel = False
+        use_cuda = True
+        parallel = True
         rank = 0
         world_size = 1
 
@@ -101,6 +101,10 @@ class GasEmitDetect:
                 # convert video frame to gray-scaled
                 gray_frame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
 
+                # send frame to calc optical flow (GasFlowRate)
+                if calc_flow_rate:
+                    gfl.AddGrayFrame(gray_frame)
+
                 # GMM (Remove noise and weak camera motion)
                 fgmask = fgbg.apply(gray_frame)
                 kernel1 = np.ones((5, 5), np.uint8)
@@ -179,13 +183,19 @@ class GasEmitDetect:
                 if org_frm == 0:
                     frm_offset_write = 0
 
+
+                if calc_flow_rate:
+                    gfl.ClacGasFlowRate(np.uint8(rgb_4d_smoke[f]))
+
+
                 for f in range(frm_offset_write, frm_offset_write + frm_count_write, 1):
 
                     if calc_flow_rate:
-                        if rgb_4d_smoke_hist is None:
-                            rgb_4d_smoke_hist = rgb_4d_smoke[f]
-                        rgb_4d_smoke_hist = rgb_4d_smoke_hist * 0.95 + rgb_4d_smoke[f] * 0.05
-                        merge_res = gfl.ClacGasFlowRate(all_frames[f], np.uint8(rgb_4d_smoke_hist))
+                        #if rgb_4d_smoke_hist is None:
+                        #    rgb_4d_smoke_hist = rgb_4d_smoke[f]
+                        #rgb_4d_smoke_hist = rgb_4d_smoke_hist * 0.95 + rgb_4d_smoke[f] * 0.05
+                        #merge_res = gfl.ClacGasFlowRate_single(all_frames[f], np.uint8(rgb_4d_smoke_hist))
+                        merge_res = gfl.ShowEmitResult_frame(all_frames[f])
                     else:
                         merge_res = np.maximum(rgb_4d_smoke[f], all_frames[f])
 
