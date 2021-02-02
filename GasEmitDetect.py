@@ -74,7 +74,7 @@ class GasEmitDetect:
 
 
         if calc_flow_rate:
-            gfl = GasFlowRate(fps)
+            gfl = GasFlowRate(fps, nf)
 
 
         rgb_4d = np.zeros((nf, height, width, 3), dtype=np.float32)
@@ -185,7 +185,8 @@ class GasEmitDetect:
 
 
                 if calc_flow_rate:
-                    gfl.ClacGasFlowRate(np.uint8(rgb_4d_smoke[f]))
+                    #gfl.ClacGasFlowRate(np.uint8(rgb_4d_smoke[f]))
+                    gfl_result_list = gfl.CalcGasFlowRate(np.uint8(rgb_4d_smoke[f,:,:,2]))
 
 
                 for f in range(frm_offset_write, frm_offset_write + frm_count_write, 1):
@@ -195,7 +196,9 @@ class GasEmitDetect:
                         #    rgb_4d_smoke_hist = rgb_4d_smoke[f]
                         #rgb_4d_smoke_hist = rgb_4d_smoke_hist * 0.95 + rgb_4d_smoke[f] * 0.05
                         #merge_res = gfl.ClacGasFlowRate_single(all_frames[f], np.uint8(rgb_4d_smoke_hist))
-                        merge_res = gfl.ShowEmitResult_frame(all_frames[f])
+
+                        #merge_res = gfl.ShowEmitResult_frame(all_frames[f])
+                        merge_res = gfl.ShowEmitResult_frame(np.maximum(rgb_4d_smoke[f], all_frames[f]), gfl_result_list)
                     else:
                         merge_res = np.maximum(rgb_4d_smoke[f], all_frames[f])
 
