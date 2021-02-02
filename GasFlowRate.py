@@ -6,9 +6,11 @@ from matplotlib import pyplot as plt
 
 class GasFlowRate:
 
-    def __init__(self, fps):
+    def __init__(self, fps, nf):
 
         self.fps = fps
+        self.nf = nf
+
         self.fgbg = cv.createBackgroundSubtractorMOG2()
         self.prev_gray = None
         self.flow_hist = None
@@ -24,11 +26,81 @@ class GasFlowRate:
         flow = 2.0 * cv.calcOpticalFlowFarneback(self.prev_gray, gray_frame,
                                            None, 0.5, 3, 15, 3, 5, 1.2, 0)
         self.prev_gray = gray_frame
-        
-        if self.flow_hist is None:
-            self.flow_hist = flow
-        self.flow_hist = flow * 0.05 + self.flow_hist * 0.95
 
+        #if self.flow_hist is None:
+        #    self.flow_hist = flow
+        #self.flow_hist = flow * 0.05 + self.flow_hist * 0.95
+        if self.flow_hist is None:
+            self.flow_hist = np.zeros((self.nf, np.shape(flow)[0], np.shape(flow)[1], np.shape(flow)[2]))
+            self.index_hist = 0
+        self.flow_hist[self.index_hist,:,:,:] = flow
+        self.index_hist += 1
+        if self.index_hist >= self.nf:
+            self.index_hist = 0
+
+    def CalcGasFlowRate(self, bin_gas_region):
+
+        #for f in range(self.nf):
+        #    abs_flow = np.sqrt(self.flow_hist[:, :, 0] ** 2 + self.flow_hist[:, :, 1] ** 2)
+
+        contours = cv.findContours(np.uint8(bin_gas_region), cv.RETR_EXTERNAL,
+                                   cv.CHAIN_APPROX_SIMPLE)
+        contours = imutils.grab_contours(contours)
+
+        result_list = []
+        flow_median_all = [0,0]
+        for contour in contours:
+            abs_contour = np.zeros_like(bin_gas_region)
+            abs_contour = cv.drawContours(abs_contour, [contour], -1, 1, thickness=-1)
+
+            for f in range(self.nf):
+                flow_sel_zone = self.flow_hist[f,:,:,:]
+                flow_sel_zone[:,:,0] *= abs_contour
+                flow_sel_zone[:,:,1] *= abs_contour
+
+                flow_abs = np.abs(flow_sel_zone[:, :, 0] + 1j * flow_sel_zone[:, :, 1])
+                cond = flow_abs > 1.0
+                if np.max(cond) > 0:
+                    flow_sel = flow_sel_zone[cond]
+                    shift_smoke = np.median(flow_sel, axis=0)
+                else:
+                    shift_smoke = [0, 0]
+                flow_median_all = flow_median_all + shift_smoke
+
+            ind = np.unravel_index(np.argmax(flow_abs), flow_abs.shape)
+
+            rect = cv.minAreaRect(contour)
+            box = cv.boxPoints(rect)  # cv2.boxPoints(rect) for OpenCV 3.x
+            box = np.int0(box)
+
+
+            rate = np.abs(flow_median_all[0] + 1j * flow_median_all[1])
+            result_list.append([rate, ind[0], ind[1], rect])
+
+        return result_list
+
+    def ShowEmitResult_frame(self, color_frame, result_list):
+
+        #merge_frame = np.maximum(color_frame, self.bin_gas)
+        merge_frame = color_frame
+
+        # lines
+        vis = merge_frame
+
+        for res in result_list:
+            rect = res[3]
+            box = cv.boxPoints(rect)
+            box = np.int0(box)
+            cv.drawContours(vis, [box], 0, (255, 255, 255), 1)
+
+            str = '{:.2f} MCF'.format(res[0])
+            cv.putText(vis, str, (int(res[2]), int(res[1])), cv.FONT_ITALIC, fontScale=1,
+                       thickness=2, lineType=cv.LINE_AA, color=(255, 100, 50))
+
+
+        #cv.imshow("Optical flow live view", vis)
+        return vis
+    '''
     def ClacGasFlowRate(self, bin_gas_region):
 
         flow = self.flow_hist
@@ -218,7 +290,7 @@ class GasFlowRate:
                 thickness=1)
         #cv.imshow("Optical flow live view", vis)
         return vis
-
+    '''
 
     def ClacGasFlowRate_single(self, color_frame, bin_gas_region):
 
