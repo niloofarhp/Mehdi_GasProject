@@ -23,7 +23,8 @@ class GasFlowRate:
 
         flow = 2.0 * cv.calcOpticalFlowFarneback(self.prev_gray, gray_frame,
                                            None, 0.5, 3, 15, 3, 5, 1.2, 0)
-
+        self.prev_gray = gray_frame
+        
         if self.flow_hist is None:
             self.flow_hist = flow
         self.flow_hist = flow * 0.05 + self.flow_hist * 0.95
