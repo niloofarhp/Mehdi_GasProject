@@ -122,8 +122,7 @@ class GasEmitDetect:
             w_step = int(np.ceil(1.4 * width / smoke_check_frame))
             h_step = int(np.ceil(1.4 * height / smoke_check_frame))
 
-            all_gfl_result_list = []
-
+            found_and_smoke = False
             for w in range(w_step):
                 for h in range(h_step):
 
@@ -174,12 +173,13 @@ class GasEmitDetect:
                             rgb_4d_smoke[:, y1:y2, x2 - 1, 1] = np.uint8(255 * np.ones([nf, y2 - y1]))
                             rgb_4d_smoke[:, y1, x1:x2, 1] = np.uint8(255 * np.ones([nf, x2 - x1]))
                             rgb_4d_smoke[:, y2 - 1, x1:x2, 1] = np.uint8(255 * np.ones([nf, x2 - x1]))
+                            found_and_smoke = True
 
-                            if calc_flow_rate:
-                                # gfl.ClacGasFlowRate(np.uint8(rgb_4d_smoke[f]))
-                                gfl_result = gfl.CalcGasFlowRate(gray_frames, np.uint8(rgb_4d_smoke[f, :, :, 2]))
-                                for res in gfl_result :
-                                    all_gfl_result_list.append(res)
+            gfl_result = []
+            if calc_flow_rate and found_and_smoke:
+                # gfl.ClacGasFlowRate(np.uint8(rgb_4d_smoke[f]))
+                gfl_result = gfl.CalcGasFlowRate(gray_frames, np.uint8(rgb_4d_smoke[f, :, :, 2]))
+
 
             # write the flipped frame
             if out_vid_addr is not None:
@@ -200,7 +200,7 @@ class GasEmitDetect:
                         #merge_res = gfl.ClacGasFlowRate_single(all_frames[f], np.uint8(rgb_4d_smoke_hist))
 
                         #merge_res = gfl.ShowEmitResult_frame(all_frames[f])
-                        merge_res = gfl.ShowEmitResult_frame(np.maximum(rgb_4d_smoke[f], all_frames[f]), all_gfl_result_list)
+                        merge_res = gfl.ShowEmitResult_frame(np.maximum(rgb_4d_smoke[f], all_frames[f]), gfl_result)
                     else:
                         merge_res = np.maximum(rgb_4d_smoke[f], all_frames[f])
 
