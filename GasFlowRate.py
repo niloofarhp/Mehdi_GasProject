@@ -13,9 +13,7 @@ class GasFlowRate:
 
         self.fgbg = cv.createBackgroundSubtractorMOG2()
         self.prev_gray = None
-        #self.gray_frame_history = None
         self.gas_flow_rate_hist = None
-
         self.rate_FCS = None
 
     def AddGrayFrame(self, gray_frame):
@@ -119,7 +117,6 @@ class GasFlowRate:
             box = cv.boxPoints(rect)
             box = np.int0(box)
             cv.drawContours(vis, [box], 0, (255, 255, 255), 1)
-
             str = '{:.2f} MCF'.format(res[0])
             cv.putText(vis, str, (int(res[2]), int(res[1])), cv.FONT_ITALIC, fontScale=1,
                        thickness=2, lineType=cv.LINE_AA, color=(255, 100, 50))
