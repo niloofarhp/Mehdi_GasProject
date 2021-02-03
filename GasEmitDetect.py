@@ -7,13 +7,19 @@ from GasFlowRate import GasFlowRate
 from grad_cam_viz import GradCam
 from i3d_learner import I3dLearner
 
+DEBUG_MODE = True
+
 class GasEmitDetect:
 
     def __init__(self, model_addr):
 
         # I3dLearner Configurations
-        use_cuda = True
-        parallel = True
+        if DEBUG_MODE:
+            use_cuda = False
+            parallel = False
+        else:
+            use_cuda = True
+            parallel = True
         rank = 0
         world_size = 1
 
@@ -30,7 +36,7 @@ class GasEmitDetect:
     # -----------------------------------------------------------------------
     # Contrast Limited Adaptive Histogram Equalization ----------------------
     # -----------------------------------------------------------------------
-    def Normalize_CLAHE(img):
+    def Normalize_CLAHE(self, img):
         lab = cv.cvtColor(img, cv.COLOR_BGR2LAB)
         l, a, b = cv.split(lab)
         clahe = cv.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
@@ -42,7 +48,7 @@ class GasEmitDetect:
     # -----------------------------------------------------------------------
     # Gas Detect (from Video) -----------------------------------------------
     # -----------------------------------------------------------------------
-    def DetectGasEmit_from_video(self, in_vid_addr, calc_flow_rate=False, out_vid_addr=None):
+    def DetectGasEmit_from_video(self, in_vid_addr, calc_flow_rate=False, out_vid_addr=None, full_resolution=True, normalize_frame=False, tracking_mode=False):
 
         capture = cv.VideoCapture(in_vid_addr)
         num_frame = capture.get(cv.CAP_PROP_FRAME_COUNT)
@@ -69,12 +75,15 @@ class GasEmitDetect:
         nf_ovl = int(nf / 2)    # nf overlap
 
         smoke_check_frame = 224
+        if not full_resolution:
+            smoke_check_frame = min(width, height)
+
         rgb_4d_smoke_hist = None
         gas_emit_report = []
 
 
         if calc_flow_rate:
-            gfl = GasFlowRate(fps, nf)
+            gfr_obj = GasFlowRate(fps, nf)
 
 
         rgb_4d = np.zeros((nf, height, width, 3), dtype=np.float32)
@@ -94,8 +103,8 @@ class GasEmitDetect:
 
                 # convert video frame to RGB
                 img_rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
-                if False:
-                    img_rgb = Normalize_CLAHE(img_rgb)
+                if normalize_frame:
+                    img_rgb = self.Normalize_CLAHE(img_rgb)
 
                 rgb_4d[f, :, :, :] = img_rgb
 
@@ -112,15 +121,68 @@ class GasEmitDetect:
 
             frame_act_2d = np.mean(frame_act_3d, axis=0)
 
-            print('\nframe : ', str(org_frm))
+            #---------------------------------------------------
+            #--- tracking mode ---------------------------------
+            #---------------------------------------------------
+            if tracking_mode :
+                rgb_4d_wrap = np.zeros((nf, height, width, 3), dtype=np.float32)
+                flow_hist = np.zeros((nf, height, width, 2), dtype=np.float32)
+                shift_frame = np.zeros([nf, 2])
+
+                for i in range(nf - 1):
+                    gray = gray_frames[i]
+                    gray_next = gray_frames[i + 1]
+                    flow = 2.0 * cv.calcOpticalFlowFarneback(gray, gray_next, None, 0.5, 3, 25, 3, 5, 1.1, 0)
+                    flow_hist[i, :, :, :] = flow
+
+                    flow_abs = np.abs(flow[:, :, 0] + 1j * flow[:, :, 1])
+                    ind = np.unravel_index(np.argmax(flow_abs), flow_abs.shape)
+                    flow_max = flow[ind[0], ind[1]]
+                    shift_frame[i, :] = flow_max
+
+                    cond = flow_abs > 1.0
+                    if len(cond) > 0:
+                        flow_sel = flow[cond]
+                        shift_frame[i, 0] = np.median(flow_sel[:, 0])
+                        shift_frame[i, 1] = np.median(flow_sel[:, 1])
+                    else:
+                        shift_frame[i, :] = [0, 0]
+
+                shift_frame_acc = np.zeros([nf, 2])
+                nf_2 = int(nf / 2)
+                for i in range(nf_2):
+                    shift_frame_acc[i, :] = np.sum(shift_frame[i:nf_2, :], axis=0)
+                for i in range(nf_2 + 1, nf, 1):
+                    shift_frame_acc[i, :] = -1 * np.sum(shift_frame[nf_2:i, :], axis=0)
+
+                for i in range(nf):
+                    shift_frame_acc_abs = np.abs(shift_frame_acc[i, 0] + 1j * shift_frame_acc[i, 1])
+                    if (shift_frame_acc_abs > 5):
+                        matrix = [[1, 0, shift_frame_acc[i, 0]],  # x
+                                  [0, 1, shift_frame_acc[i, 1]]]  # y
+                        t = np.float32(matrix)
+                        rgb_4d_wrap[i, :, :, :] = cv.warpAffine(rgb_4d[i, :, :, :], t, (width, height))
+                    else:
+                        rgb_4d_wrap[i, :, :, :] = rgb_4d[i, :, :, :]
+
+                flow_diff = flow_hist[nf_2, :, :, :]  # - shift_frame
+                flow_diff[:, :, 0] = flow_diff[:, :, 0] - shift_frame[nf_2, 0]
+                flow_diff[:, :, 1] = flow_diff[:, :, 1] - shift_frame[nf_2, 1]
+                flow_abs_after_shift = np.abs(flow_diff[:, :, 0] + 1j * flow_diff[:, :, 1])
+
+                kernel = np.ones((10, 10), np.float32)
+                frame_act_2d = cv.filter2D(flow_abs_after_shift, -1, kernel)
+
+            if DEBUG_MODE:
+                print('\nframe : ', str(org_frm))
 
             smoke_thr = 0.6
             activation_thr = 0.85
 
             rgb_4d_smoke = np.zeros([nf, height, width, 3], dtype=np.uint8)
 
-            w_step = int(np.ceil(1.4 * width / smoke_check_frame))
-            h_step = int(np.ceil(1.4 * height / smoke_check_frame))
+            w_step = int(np.ceil(1.4 * (width / smoke_check_frame - 1) + 1))
+            h_step = int(np.ceil(1.4 * (height / smoke_check_frame - 1) + 1))
 
             found_and_smoke = False
             for w in range(w_step):
@@ -144,6 +206,8 @@ class GasEmitDetect:
 
                     if activity_sum > activity_thr:
                         selected_zone = np.uint8(rgb_4d[:, y1:y2, x1:x2, :])
+                        if tracking_mode:
+                            selected_zone = np.uint8(rgb_4d_wrap[:, y1:y2, x1:x2, :])
 
                         v = self.transform(selected_zone)
                         v = torch.unsqueeze(v, 0)
@@ -160,13 +224,42 @@ class GasEmitDetect:
                             C = C.reshape((C.shape[0], -1))
 
                             active_c = np.multiply(C > activation_thr, 1)
-                            smoke_map = np.reshape(active_c, (nf, smoke_check_frame, smoke_check_frame))
+                            smoke_map = np.reshape(active_c, (nf, 224, 224))
                             smoke_map = np.max(smoke_map[10:20, :, :], axis=0)
+
+                            if smoke_check_frame != 224:
+                                smoke_map_scaled = cv.resize(np.uint8(smoke_map), (smoke_check_frame, smoke_check_frame))
+                            else:
+                                smoke_map_scaled = smoke_map
 
                             for f in range(nf):
                                 rgb_4d_smoke[f, y1:y2, x1:x2, 2] = np.maximum(
                                     rgb_4d_smoke[f, y1:y2, x1:x2, 2],
-                                    np.uint8(255 * smoke_map[:, :] * pred_upsample[f]))  # * abs_sel[f,:,:]))
+                                    np.uint8(255 * smoke_map_scaled[:, :] * pred_upsample[f]))  # * abs_sel[f,:,:]))
+
+
+                            # ---------------------------------------------------
+                            # tracking mode (reverse tracked frames) ------------
+                            # ---------------------------------------------------
+                            if tracking_mode:
+                                E_Z = np.zeros((height, width))
+                                E_T = np.zeros((height, width))
+                                for f in range(nf):
+                                    E_Z[y1:y2, x1:x2] = smoke_map_scaled
+
+                                    shift_frame_acc_abs = np.abs(shift_frame_acc[f, 0] + 1j * shift_frame_acc[f, 1])
+                                    if (shift_frame_acc_abs > 5):
+                                        matrix = [[1, 0, -1 * shift_frame_acc[f, 0]],  # x
+                                                  [0, 1, -1 * shift_frame_acc[f, 1]]]  # y
+                                        t = np.float32(matrix)
+                                        E_T = cv.warpAffine(np.float32(E_Z), t, (width, height))
+                                        rgb_4d_smoke[f, :, :, 2] = np.maximum(rgb_4d_smoke[f, :, :, 2], np.uint8(
+                                            255 * E_T * pred_upsample[f]))
+                                    else:
+                                        rgb_4d_smoke[f, y1:y2, x1:x2, 2] = np.maximum(
+                                            rgb_4d_smoke[f, y1:y2, x1:x2, 2],
+                                            np.uint8(255 * smoke_map_scaled[:, :] * pred_upsample[f]))
+
 
                             # draw green rect if region
                             rgb_4d_smoke[:, y1:y2, x1, 1] = np.uint8(255 * np.ones([nf, y2 - y1]))
@@ -175,10 +268,10 @@ class GasEmitDetect:
                             rgb_4d_smoke[:, y2 - 1, x1:x2, 1] = np.uint8(255 * np.ones([nf, x2 - x1]))
                             found_and_smoke = True
 
-            gfl_result = []
+            gfr_result = []
             if calc_flow_rate and found_and_smoke:
-                # gfl.ClacGasFlowRate(np.uint8(rgb_4d_smoke[f]))
-                gfl_result = gfl.CalcGasFlowRate(gray_frames, np.uint8(rgb_4d_smoke[f, :, :, 2]))
+                # gfr_obj.ClacGasFlowRate(np.uint8(rgb_4d_smoke[f]))
+                gfr_result = gfr_obj.CalcGasFlowRate(gray_frames, np.uint8(rgb_4d_smoke[f, :, :, 2]))
 
 
             # write the flipped frame
@@ -189,27 +282,26 @@ class GasEmitDetect:
                     frm_offset_write = 0
 
 
-
-
                 for f in range(frm_offset_write, frm_offset_write + frm_count_write, 1):
 
+                    merge_frame = np.maximum(rgb_4d_smoke[f], all_frames[f])
                     if calc_flow_rate:
-                        #if rgb_4d_smoke_hist is None:
-                        #    rgb_4d_smoke_hist = rgb_4d_smoke[f]
-                        #rgb_4d_smoke_hist = rgb_4d_smoke_hist * 0.95 + rgb_4d_smoke[f] * 0.05
-                        #merge_res = gfl.ClacGasFlowRate_single(all_frames[f], np.uint8(rgb_4d_smoke_hist))
+                        for res in gfr_result:
+                            rect = res[3]
+                            box = cv.boxPoints(rect)
+                            box = np.int0(box)
+                            merge_frame = cv.drawContours(merge_frame, [box], 0, (255, 255, 255), 1)
+                            str_rate = '{:.2f} MCF'.format(res[0])
+                            cv.putText(merge_frame, str_rate, (int(res[1]), int(res[2])), cv.FONT_ITALIC, fontScale=1,
+                                       thickness=2, lineType=cv.LINE_AA, color=(255, 100, 50))
 
-                        #merge_res = gfl.ShowEmitResult_frame(all_frames[f])
-                        merge_res = gfl.ShowEmitResult_frame(np.maximum(rgb_4d_smoke[f], all_frames[f]), gfl_result)
-                    else:
-                        merge_res = np.maximum(rgb_4d_smoke[f], all_frames[f])
-
-                    all = np.concatenate((all_frames[f], merge_res), axis=0)
+                    all = np.concatenate((all_frames[f], merge_frame), axis=0)
                     out_video.write(all)
 
-            #cv.imshow('all', all)
-            if cv.waitKey(1) & 0xFF == ord('q'):
-                break
+            if DEBUG_MODE:
+                cv.imshow('all', all)
+                if cv.waitKey(1) & 0xFF == ord('q'):
+                    break
 
         capture.release()
         if out_vid_addr:
