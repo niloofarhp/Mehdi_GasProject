@@ -13,12 +13,22 @@ class GasFlowRate:
 
         self.fgbg = cv.createBackgroundSubtractorMOG2()
         self.prev_gray = None
-        self.flow_hist = None
+        #self.gray_frame_history = None
         self.gas_flow_rate_hist = None
 
         self.rate_FCS = None
 
     def AddGrayFrame(self, gray_frame):
+
+        '''
+        if self.gray_frame_history is None:
+            self.gray_frame_history = np.zeros((self.nf, np.shape(gray_frame)[0], np.shape(gray_frame)[1]))
+            self.index_hist = 0
+        self.gray_frame_history[self.index_hist, :, :] = gray_frame
+        self.index_hist += 1
+        if self.index_hist >= self.nf:
+            self.index_hist = 0
+
 
         if self.prev_gray is None:
             self.prev_gray = gray_frame
@@ -37,8 +47,9 @@ class GasFlowRate:
         self.index_hist += 1
         if self.index_hist >= self.nf:
             self.index_hist = 0
+        '''
 
-    def CalcGasFlowRate(self, bin_gas_region, flow_method_median=False):
+    def CalcGasFlowRate(self, gray_frames, bin_gas_region, flow_method_median=True):
 
         #for f in range(self.nf):
         #    abs_flow = np.sqrt(self.flow_hist[:, :, 0] ** 2 + self.flow_hist[:, :, 1] ** 2)
@@ -51,11 +62,23 @@ class GasFlowRate:
         for contour in contours:
             abs_contour = np.zeros_like(bin_gas_region)
             abs_contour = cv.drawContours(abs_contour, [contour], -1, 1, thickness=-1)
+            boundingRect = cv.boundingRect(contour)
+            w1 = boundingRect[0]
+            w2 = w1 + boundingRect[2]
+            h1 = boundingRect[1]
+            h2 = h1 + boundingRect[3]
+
+            # Create flow hist specialy for this zone
+            flow_hist = np.zeros((self.nf, np.shape(bin_gas_region)[0], np.shape(bin_gas_region)[1], 2))
+            for f in range(self.nf-1):
+                flow_hist[f,h1:h2,w1:w2,:] = 2.0 * cv.calcOpticalFlowFarneback(
+                    gray_frames[f,h1:h2,w1:w2], gray_frames[f+1,h1:h2,w1:w2],
+                                                     None, 0.5, 3, 15, 3, 5, 1.2, 0)
 
             flow_all_frame = [0, 0]
 
             for f in range(self.nf):
-                flow_sel_zone = self.flow_hist[f,:,:,:]
+                flow_sel_zone = flow_hist[f,:,:,:]
                 flow_sel_zone[:,:,0] *= abs_contour
                 flow_sel_zone[:,:,1] *= abs_contour
 
