@@ -140,7 +140,7 @@ class GasFlowRate:
                        thickness=2, lineType=cv.LINE_AA, color=(255, 100, 50))
 
 
-        cv.imshow("Optical flow live view", vis)
+        #cv.imshow("Optical flow live view", vis)
         return vis
     '''
     def ClacGasFlowRate(self, bin_gas_region):
