@@ -179,7 +179,7 @@ class GasEmitDetect:
                                 # gfl.ClacGasFlowRate(np.uint8(rgb_4d_smoke[f]))
                                 gfl_result = gfl.CalcGasFlowRate(gray_frames, np.uint8(rgb_4d_smoke[f, :, :, 2]))
                                 for res in gfl_result :
-                                    all_gfl_result_list.append(reg)
+                                    all_gfl_result_list.append(res)
 
             # write the flipped frame
             if out_vid_addr is not None:
