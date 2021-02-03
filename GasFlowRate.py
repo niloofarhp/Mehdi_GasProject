@@ -38,7 +38,7 @@ class GasFlowRate:
         if self.index_hist >= self.nf:
             self.index_hist = 0
 
-    def CalcGasFlowRate(self, bin_gas_region):
+    def CalcGasFlowRate(self, bin_gas_region, flow_method_median=False):
 
         #for f in range(self.nf):
         #    abs_flow = np.sqrt(self.flow_hist[:, :, 0] ** 2 + self.flow_hist[:, :, 1] ** 2)
@@ -48,10 +48,11 @@ class GasFlowRate:
         contours = imutils.grab_contours(contours)
 
         result_list = []
-        flow_median_all = [0,0]
         for contour in contours:
             abs_contour = np.zeros_like(bin_gas_region)
             abs_contour = cv.drawContours(abs_contour, [contour], -1, 1, thickness=-1)
+
+            flow_all_frame = [0, 0]
 
             for f in range(self.nf):
                 flow_sel_zone = self.flow_hist[f,:,:,:]
@@ -59,22 +60,25 @@ class GasFlowRate:
                 flow_sel_zone[:,:,1] *= abs_contour
 
                 flow_abs = np.abs(flow_sel_zone[:, :, 0] + 1j * flow_sel_zone[:, :, 1])
-                cond = flow_abs > 1.0
-                if np.max(cond) > 0:
-                    flow_sel = flow_sel_zone[cond]
-                    shift_smoke = np.median(flow_sel, axis=0)
-                else:
-                    shift_smoke = [0, 0]
-                flow_median_all = flow_median_all + shift_smoke
+                ind = np.unravel_index(np.argmax(flow_abs), flow_abs.shape)
 
-            ind = np.unravel_index(np.argmax(flow_abs), flow_abs.shape)
+                if flow_method_median:
+                    cond = flow_abs > 1.0
+                    if np.max(cond) > 0:
+                        flow_sel = flow_sel_zone[cond]
+                        shift_smoke = np.median(flow_sel, axis=0)
+                    else:
+                        shift_smoke = [0, 0]
+                else:
+                    shift_smoke = flow_sel_zone[ind[0], ind[1]]
+
+                flow_all_frame = flow_all_frame + shift_smoke
 
             rect = cv.minAreaRect(contour)
             box = cv.boxPoints(rect)  # cv2.boxPoints(rect) for OpenCV 3.x
             box = np.int0(box)
 
-
-            rate = np.abs(flow_median_all[0] + 1j * flow_median_all[1])
+            rate = np.abs(flow_all_frame[0] + 1j * flow_all_frame[1])
             result_list.append([rate, ind[0], ind[1], rect])
 
         return result_list
