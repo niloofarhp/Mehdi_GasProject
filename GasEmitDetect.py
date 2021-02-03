@@ -73,8 +73,8 @@ class GasEmitDetect:
         gas_emit_report = []
 
 
-        #if calc_flow_rate:
-        #    gfl = GasFlowRate(fps, nf)
+        if calc_flow_rate:
+            gfl = GasFlowRate(fps, nf)
 
 
         rgb_4d = np.zeros((nf, height, width, 3), dtype=np.float32)
@@ -102,8 +102,8 @@ class GasEmitDetect:
                 gray_frame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
 
                 # send frame to calc optical flow (GasFlowRate)
-                if calc_flow_rate:
-                    gfl.AddGrayFrame(gray_frame)
+                #if calc_flow_rate:
+                #    gfl.AddGrayFrame(gray_frame)
 
                 # GMM (Remove noise and weak camera motion)
                 fgmask = fgbg.apply(gray_frame)
