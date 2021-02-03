@@ -49,10 +49,18 @@ class GasFlowRate:
 
     def CalcGasFlowRate(self, gray_frames, bin_gas_region, flow_method_median=True):
 
+        step = 10
+        kernel = np.ones((step, step), np.uint8)
+        bin_gas_region_erode = cv.erode(1.0 * bin_gas_region, kernel)
+        bin_gas_region_erode = np.multiply(bin_gas_region_erode > 0.1, 1)
+
+        height = np.shape(bin_gas_region)[0]
+        width = np.shape(bin_gas_region)[1]
+
         #for f in range(self.nf):
         #    abs_flow = np.sqrt(self.flow_hist[:, :, 0] ** 2 + self.flow_hist[:, :, 1] ** 2)
 
-        contours = cv.findContours(np.uint8(bin_gas_region), cv.RETR_EXTERNAL,
+        contours = cv.findContours(np.uint8(bin_gas_region_erode), cv.RETR_EXTERNAL,
                                    cv.CHAIN_APPROX_SIMPLE)
         contours = imutils.grab_contours(contours)
 
@@ -67,7 +75,7 @@ class GasFlowRate:
             h2 = h1 + boundingRect[3]
 
             # Create flow hist specialy for this zone
-            flow_hist = np.zeros((self.nf, np.shape(bin_gas_region)[0], np.shape(bin_gas_region)[1], 2))
+            flow_hist = np.zeros((self.nf, height, width, 2))
             for f in range(self.nf-1):
                 flow_hist[f,h1:h2,w1:w2,:] = 2.0 * cv.calcOpticalFlowFarneback(
                     gray_frames[f,h1:h2,w1:w2], gray_frames[f+1,h1:h2,w1:w2],
@@ -99,8 +107,18 @@ class GasFlowRate:
             box = cv.boxPoints(rect)  # cv2.boxPoints(rect) for OpenCV 3.x
             box = np.int0(box)
 
-            rate = np.abs(flow_all_frame[0] + 1j * flow_all_frame[1])
-            result_list.append([rate, ind[0], ind[1], rect])
+            cross_section = np.min(rect[1])
+            pixel_flow = np.abs(flow_all_frame[0] + 1j * flow_all_frame[1])
+            pixel_flow_per_frame = (pixel_flow / self.nf)
+
+            rate_pixel = cross_section * pixel_flow_per_frame * self.fps
+            rate_MM = rate_pixel * (20.0 / width) * (20.0 / height)
+
+            # 1 MCM = 35.3 MCF
+            rate_FCS = rate_MM * 35.3
+
+            center = np.int0(np.mean(box, axis=0))
+            result_list.append([rate_FCS, center[0], center[1], rect])
 
         return result_list
 
@@ -116,13 +134,13 @@ class GasFlowRate:
             rect = res[3]
             box = cv.boxPoints(rect)
             box = np.int0(box)
-            cv.drawContours(vis, [box], 0, (255, 255, 255), 1)
+            vis = cv.drawContours(vis, [box], 0, (255, 255, 255), 1)
             str = '{:.2f} MCF'.format(res[0])
-            cv.putText(vis, str, (int(res[2]), int(res[1])), cv.FONT_ITALIC, fontScale=1,
+            cv.putText(vis, str, (int(res[1]), int(res[2])), cv.FONT_ITALIC, fontScale=1,
                        thickness=2, lineType=cv.LINE_AA, color=(255, 100, 50))
 
 
-        #cv.imshow("Optical flow live view", vis)
+        cv.imshow("Optical flow live view", vis)
         return vis
     '''
     def ClacGasFlowRate(self, bin_gas_region):
