@@ -75,7 +75,7 @@ class GasFlowRate:
                     gray_frames[f,h1:h2,w1:w2], gray_frames[f+1,h1:h2,w1:w2],
                                                      None, 0.5, 3, 15, 3, 5, 1.2, 0)
 
-            flow_all_frame = [0, 0]
+            flow_all_frame = np.zeros((2,))
 
             for f in range(self.nf):
                 flow_sel_zone = flow_hist[f,:,:,:]
@@ -91,7 +91,7 @@ class GasFlowRate:
                         flow_sel = flow_sel_zone[cond]
                         shift_smoke = np.median(flow_sel, axis=0)
                     else:
-                        shift_smoke = [0, 0]
+                        shift_smoke = np.zeros((2,))
                 else:
                     shift_smoke = flow_sel_zone[ind[0], ind[1]]
 
