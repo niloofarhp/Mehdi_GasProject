@@ -73,8 +73,8 @@ class GasEmitDetect:
         gas_emit_report = []
 
 
-        if calc_flow_rate:
-            gfl = GasFlowRate(fps, nf)
+        #if calc_flow_rate:
+        #    gfl = GasFlowRate(fps, nf)
 
 
         rgb_4d = np.zeros((nf, height, width, 3), dtype=np.float32)
