@@ -7,7 +7,7 @@ from GasFlowRate import GasFlowRate
 from grad_cam_viz import GradCam
 from i3d_learner import I3dLearner
 
-DEBUG_MODE = True
+DEBUG_MODE = False
 
 class GasEmitDetect:
 
