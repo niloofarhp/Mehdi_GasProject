@@ -49,6 +49,20 @@ class GasEmitDetect:
     # Gas Detect (from Video) -----------------------------------------------
     # -----------------------------------------------------------------------
     def DetectGasEmit_from_video(self, in_vid_addr, calc_flow_rate=False, out_vid_addr=None, full_resolution=True, normalize_frame=False, tracking_mode=False):
+        """
+         DetectGasEmit_from_video(in_vid_addr, calc_flow_rate, out_vid_addr, full_resolution, normalize_frame, tracking_mode) -> Gas-Emit-List
+         .   @brief Sets a property in the VideoCapture.
+         .
+         .       @param in_vid_addr : input video address (string)
+         .       @param calc_flow_rate : calculate gas flow rate
+         .       @param out_vid_addr : output video address to record result (if None -> only result list)
+         .       @param full_resolution : (True-> window size = 224x224,  False-> window size = min(height,width))
+         .              full_resolution is safe for small gas emissions
+         .       @param normalize_frame : (True-> enable "Contrast Limited Adaptive Histogram Equalization")
+         .       @param tracking_mode : (True-> tracking mode, False-> Fixed camera)
+         .       return
+         .          Gas-Emit-List : list of Emitted Gas in frames
+         """
 
         capture = cv.VideoCapture(in_vid_addr)
         num_frame = capture.get(cv.CAP_PROP_FRAME_COUNT)
@@ -78,8 +92,6 @@ class GasEmitDetect:
         if not full_resolution:
             smoke_check_frame = min(width, height)
 
-        rgb_4d_smoke_hist = None
-        gas_emit_report = []
 
 
         if calc_flow_rate:
@@ -90,6 +102,8 @@ class GasEmitDetect:
         all_frames = np.zeros((nf, height, width, 3), dtype=np.uint8)
         gray_frames = np.zeros((nf, height, width), dtype=np.uint8)
         frame_act_3d = np.zeros([nf, height, width])
+
+        gas_emit_report = []
 
         for org_frm in range(0, int(num_frame - nf - nf_ovl), nf - nf_ovl):
 
@@ -173,8 +187,7 @@ class GasEmitDetect:
                 kernel = np.ones((10, 10), np.float32)
                 frame_act_2d = cv.filter2D(flow_abs_after_shift, -1, kernel)
 
-            if DEBUG_MODE:
-                print('\nframe : ', str(org_frm))
+            print('\nframe : ', str(org_frm))
 
             smoke_thr = 0.6
             activation_thr = 0.85
@@ -272,9 +285,10 @@ class GasEmitDetect:
             if calc_flow_rate and found_and_smoke:
                 # gfr_obj.ClacGasFlowRate(np.uint8(rgb_4d_smoke[f]))
                 gfr_result = gfr_obj.CalcGasFlowRate(gray_frames, np.uint8(rgb_4d_smoke[f, :, :, 2]))
+                gas_emit_report += gfr_result
 
 
-            # write the flipped frame
+            # write the main frame + result
             if out_vid_addr is not None:
                 frm_count_write = nf - nf_ovl
                 frm_offset_write = nf_ovl
