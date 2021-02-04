@@ -32,6 +32,8 @@ class GasEmitDetect:
         self.model.train(False)  # set model to evaluate mode (IMPORTANT)
         self.grad_cam = GradCam(self.model, use_cuda=self.learner.use_cuda, normalize=False)
 
+        self.gas_region_hist = None
+
 
     # -----------------------------------------------------------------------
     # Contrast Limited Adaptive Histogram Equalization ----------------------
@@ -284,8 +286,25 @@ class GasEmitDetect:
             gfr_result = []
             if calc_flow_rate and found_and_smoke:
                 # gfr_obj.ClacGasFlowRate(np.uint8(rgb_4d_smoke[f]))
-                gfr_result = gfr_obj.CalcGasFlowRate(gray_frames, np.uint8(rgb_4d_smoke[f, :, :, 2]))
+                gfr_result = gfr_obj.CalcGasFlowRate(gray_frames, np.uint8(rgb_4d_smoke[nf-1, :, :, 2]))
                 gas_emit_report += gfr_result
+
+
+            # -----------------------------------------------------------------------
+            # histogram of gas region -----------------------------------------------
+            # -----------------------------------------------------------------------
+            if self.gas_region_hist is None:
+                self.max_gas_region_hist = 5 * fps / nf
+                self.index_gas_region_hist = 0
+                self.gas_region_hist = np.zeros((self.max_gas_region_hist, height, width))
+            self.gas_region_hist[self.index_gas_region_hist, :, :] = rgb_4d_smoke[nf-1, :, :, 2]
+            self.index_gas_region_hist += 1
+            if self.index_gas_region_hist >= self.max_gas_region_hist:
+                self.index_gas_region_hist = 0
+            current_gas_region = np.sum(self.gas_region_hist, axis=0)
+            current_gas_region = current_gas_region / np.max(current_gas_region)
+            for f in range(nf):
+                rgb_4d_smoke[f, :, :, 1] = np.uint8(255 * current_gas_region)
 
 
             # write the main frame + result
