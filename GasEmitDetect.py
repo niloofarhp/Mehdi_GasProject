@@ -294,7 +294,7 @@ class GasEmitDetect:
             # histogram of gas region -----------------------------------------------
             # -----------------------------------------------------------------------
             if self.gas_region_hist is None:
-                self.max_gas_region_hist = 5 * fps / nf
+                self.max_gas_region_hist = int(5 * fps / nf)
                 self.index_gas_region_hist = 0
                 self.gas_region_hist = np.zeros((self.max_gas_region_hist, height, width))
             self.gas_region_hist[self.index_gas_region_hist, :, :] = rgb_4d_smoke[nf-1, :, :, 2]
