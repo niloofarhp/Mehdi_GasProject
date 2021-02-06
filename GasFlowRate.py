@@ -4,6 +4,9 @@ import numpy as np
 from numpy.lib.index_tricks import MGridClass
 from matplotlib import pyplot as plt
 
+from GasFlowHistory import GasFlowHistory
+
+
 class GasFlowRate:
 
     def __init__(self, fps, nf):
@@ -15,10 +18,11 @@ class GasFlowRate:
         self.prev_gray = None
         self.gas_flow_rate_hist = None
         self.rate_FCS = None
+        self.GasFlowHistList = []
 
-    def CalcGasFlowRate(self, gray_frames, bin_gas_region, flow_method_median=True):
+    def CalcGasFlowRate(self, global_frame_counter, gray_frames, bin_gas_region, flow_method_median=True):
 
-        step = 10
+        step = 6
         kernel = np.ones((step, step), np.uint8)
         bin_gas_region_erode = cv.erode(1.0 * bin_gas_region, kernel)
         bin_gas_region_erode = np.multiply(bin_gas_region_erode > 0.1, 1)
@@ -26,9 +30,13 @@ class GasFlowRate:
         height = np.shape(bin_gas_region)[0]
         width = np.shape(bin_gas_region)[1]
 
+
         contours = cv.findContours(np.uint8(bin_gas_region_erode), cv.RETR_EXTERNAL,
                                    cv.CHAIN_APPROX_SIMPLE)
         contours = imutils.grab_contours(contours)
+
+        for gfh in self.GasFlowHistList:
+            gfh.IncreaseTimeStep(global_frame_counter)
 
         result_list = []
         for contour in contours:
@@ -40,7 +48,7 @@ class GasFlowRate:
             h1 = boundingRect[1]
             h2 = h1 + boundingRect[3]
 
-            # Create flow hist specialy for this zone
+            # Create flow hist specially for this zone
             flow_hist = np.zeros((self.nf, height, width, 2))
             for f in range(self.nf-1):
                 flow_hist[f,h1:h2,w1:w2,:] = 2.0 * cv.calcOpticalFlowFarneback(
@@ -86,8 +94,30 @@ class GasFlowRate:
             center = np.int0(np.mean(box, axis=0))
             result_list.append([rate_FCS, center[0], center[1], rect])
 
+            #----------------------------------------------------------------------
+            # find last gas reference ---------------------------------------------
+            #----------------------------------------------------------------------
+            max_similarity = 0
+            GasFlowHistObj = None
+            for gfh in self.GasFlowHistList:
+                value = gfh.IsInThisRegion(abs_contour)
+                if max_similarity < value:
+                    max_similarity = value
+                    GasFlowHistObj = gfh
+            if GasFlowHistObj is not None:
+                GasFlowHistObj.AddToThisRegion(abs_contour, rate_FCS)
+            else:
+                new_GasFlowHistObj = GasFlowHistory(self.fps, self.nf, np.shape(abs_contour), global_frame_counter)
+                new_GasFlowHistObj.AddToThisRegion(abs_contour, rate_FCS)
+                self.GasFlowHistList.append(new_GasFlowHistObj)
+
         return result_list
 
+    def Get_AllGas_report(self):
+        full_report = []
+        for gfh in self.GasFlowHistList:
+            full_report.append(gfh.GetGasInfo())
+        return full_report
 
     def ClacGasFlowRate_single(self, color_frame, bin_gas_region):
 
@@ -304,4 +334,3 @@ class GasFlowRate:
 
         #cv.imshow("Optical flow live view", vis)
         return vis
-    
