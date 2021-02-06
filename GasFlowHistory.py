@@ -56,11 +56,10 @@ class GasFlowHistory:
         return 0
 
     def GetGasInfo(self):
-        #info = [np.round(self.start_time, 2), np.round(self.stop_time, 2), np.round(self.rate_FCS, 2),
-        #        np.int0(self.gas_peak_index)]
         info = {"start time" : np.round(self.start_time, 2),
                 "stop time" : np.round(self.stop_time, 2),
-                "rate FCM" : np.round(self.stop_time, 2),
-                "location" : np.int0(self.gas_peak_index)}
+                "rate FCM" : np.round(self.rate_FCS, 2),
+                "x" : np.int0(self.gas_peak_index[1]),
+                "y" : np.int0(self.gas_peak_index[0]) }
 
         return info
