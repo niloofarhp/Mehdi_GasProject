@@ -1,7 +1,8 @@
-import cv2 as cv
+
+import numpy as np
 import torch.nn.functional as F
 import torch
-import numpy as np
+import cv2 as cv
 
 from GasFlowRate import GasFlowRate
 from grad_cam_viz import GradCam
@@ -284,27 +285,9 @@ class GasEmitDetect:
                             found_and_smoke = True
 
             gfr_result = []
-            if calc_flow_rate and found_and_smoke:
+            if calc_flow_rate:
                 # gfr_obj.ClacGasFlowRate(np.uint8(rgb_4d_smoke[f]))
-                gfr_result = gfr_obj.CalcGasFlowRate(gray_frames, np.uint8(rgb_4d_smoke[nf-1, :, :, 2]))
-                gas_emit_report += gfr_result
-
-
-            # -----------------------------------------------------------------------
-            # histogram of gas region -----------------------------------------------
-            # -----------------------------------------------------------------------
-            if self.gas_region_hist is None:
-                self.max_gas_region_hist = int(10 * fps / nf)
-                self.index_gas_region_hist = 0
-                self.gas_region_hist = np.zeros((self.max_gas_region_hist, height, width))
-            self.gas_region_hist[self.index_gas_region_hist, :, :] = rgb_4d_smoke[nf-1, :, :, 2]
-            self.index_gas_region_hist += 1
-            if self.index_gas_region_hist >= self.max_gas_region_hist:
-                self.index_gas_region_hist = 0
-            current_gas_region = np.sum(self.gas_region_hist, axis=0)
-            current_gas_region = np.multiply(current_gas_region > 0.01, 1)
-            for f in range(nf):
-                rgb_4d_smoke[f, :, :, 1] = np.uint8(255 * current_gas_region)
+                gfr_result = gfr_obj.CalcGasFlowRate(org_frm, gray_frames, np.uint8(rgb_4d_smoke[nf - 1, :, :, 2]))
 
 
             # write the main frame + result
@@ -341,4 +324,5 @@ class GasEmitDetect:
             out_video.release()
         cv.destroyAllWindows()
 
+        gas_emit_report = gfr_obj.Get_AllGas_report()
         return gas_emit_report
