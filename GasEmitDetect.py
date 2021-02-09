@@ -12,15 +12,11 @@ DEBUG_MODE = False
 
 class GasEmitDetect:
 
-    def __init__(self, model_addr):
+    def __init__(self, model_addr, use_gpu=True):
 
         # I3dLearner Configurations
-        if DEBUG_MODE:
-            use_cuda = False
-            parallel = False
-        else:
-            use_cuda = True
-            parallel = True
+        use_cuda = use_gpu
+        parallel = use_gpu
         rank = 0
         world_size = 1
 
