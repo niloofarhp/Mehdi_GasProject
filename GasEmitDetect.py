@@ -8,6 +8,7 @@ import scipy.signal as signal
 from GasFlowRate import GasFlowRate
 from grad_cam_viz import GradCam
 from i3d_learner import I3dLearner
+import datetime
 
 DEBUG_MODE = False
 
@@ -17,7 +18,7 @@ class GasEmitDetect:
 
         # I3dLearner Configurations
         use_cuda = use_gpu
-        parallel = False#use_gpu
+        parallel = use_gpu
         rank = 0
         world_size = 1
 
@@ -319,7 +320,8 @@ class GasEmitDetect:
             gfr_result = []
             if calc_flow_rate:
                 # gfr_obj.ClacGasFlowRate(np.uint8(rgb_4d_smoke[f]))
-                gfr_result = gfr_obj.CalcGasFlowRate(org_frm, gray_frames, np.uint8(rgb_4d_smoke[nf - 1, :, :, 2]))
+                cur_time = start_time + datetime.timedelta(milliseconds=int(org_frm * 1000.0 / fps))
+                gfr_result = gfr_obj.CalcGasFlowRate(cur_time, gray_frames, np.uint8(rgb_4d_smoke[nf - 1, :, :, 2]))
 
 
             # write the main frame + result
