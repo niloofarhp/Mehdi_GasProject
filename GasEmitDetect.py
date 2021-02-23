@@ -385,7 +385,7 @@ class GasEmitDetect:
             shift = self.cross_image(gray_frame, gray_frame_start)
             shift_all = shift_all + np.sum(np.abs(shift))
 
-        if(shift_all < (max_frm/3)):
+        if (shift_all > (max_frm/3)):
             return True
         else:
             return False
