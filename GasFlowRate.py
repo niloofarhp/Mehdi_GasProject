@@ -20,7 +20,7 @@ class GasFlowRate:
         self.rate_FCS = None
         self.GasFlowHistList = []
 
-    def CalcGasFlowRate(self, global_frame_counter, gray_frames, bin_gas_region, flow_method_median=True):
+    def CalcGasFlowRate(self, global_frame_time, gray_frames, bin_gas_region, flow_method_median=True):
 
         step = 6
         kernel = np.ones((step, step), np.uint8)
@@ -36,7 +36,7 @@ class GasFlowRate:
         contours = imutils.grab_contours(contours)
 
         for gfh in self.GasFlowHistList:
-            gfh.IncreaseTimeStep(global_frame_counter)
+            gfh.IncreaseTimeStep(global_frame_time)
 
         result_list = []
         for contour in contours:
@@ -107,7 +107,7 @@ class GasFlowRate:
             if GasFlowHistObj is not None:
                 GasFlowHistObj.AddToThisRegion(abs_contour, rate_FCS)
             else:
-                new_GasFlowHistObj = GasFlowHistory(self.fps, self.nf, np.shape(abs_contour), global_frame_counter)
+                new_GasFlowHistObj = GasFlowHistory(self.fps, self.nf, np.shape(abs_contour), global_frame_time)
                 new_GasFlowHistObj.AddToThisRegion(abs_contour, rate_FCS)
                 self.GasFlowHistList.append(new_GasFlowHistObj)
 
