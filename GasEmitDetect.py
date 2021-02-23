@@ -361,3 +361,31 @@ class GasEmitDetect:
         if calc_flow_rate:
             gas_emit_report = gfr_obj.Get_AllGas_report()
         return gas_emit_report
+
+    # -----------------------------------------------------------------------
+    # Check Camera vibration ------------------------------------------------
+    # -----------------------------------------------------------------------
+    def IsCamera_vibrated(self, in_vid_addr):
+
+        capture = cv.VideoCapture(in_vid_addr)
+        num_frame = capture.get(cv.CAP_PROP_FRAME_COUNT)
+        fps = capture.get(cv.CAP_PROP_FPS)  #frame per secend
+        width = int(capture.get(3))
+        height = int(capture.get(4))
+
+        max_frm = int(2 * fps)      #frames for 2 second sample
+        gray_frame_start = None
+        shift_all = 0
+
+        for f in range(max_frm):
+            ret, frame = capture.read()
+            gray_frame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+            if gray_frame_start is None:
+                gray_frame_start = gray_frame
+            shift = self.cross_image(gray_frame, gray_frame_start)
+            shift_all = shift_all + np.sum(np.abs(shift))
+
+        if(shift_all < (max_frm/3)):
+            return True
+        else:
+            return False
