@@ -1,4 +1,4 @@
-import os
+import uuid
 import numpy as np
 from numpy.lib.index_tricks import MGridClass
 from matplotlib import pyplot as plt
@@ -16,7 +16,7 @@ class GasFlowHistory:
         self.gas_ended = False
 
         # Gas information
-        self.gas_id = os.getuid()
+        self.gas_uuid = uuid.uuid1()
         self.start_time = global_frame_time
         self.stop_time = None
         self.rate_FCS = None
@@ -66,7 +66,7 @@ class GasFlowHistory:
         # smoke started but It continues (in next period)
         if self.stop_time is None:
             info = {
-                "id": self.gas_id,
+                "id": self.gas_uuid,
                 "start time": self.start_time,
                 "rate FCM": np.round(self.rate_FCS, 2),
                 "x": np.int0(self.gas_peak_index[1]),
@@ -76,7 +76,7 @@ class GasFlowHistory:
             # smoke started in previous period
             if self.start_event_reported == True:
                 info = {
-                    "id": self.gas_id,
+                    "id": self.gas_uuid,
                     "stop time": self.stop_time,
                     "rate FCM": np.round(self.rate_FCS, 2),
                     "x": np.int0(self.gas_peak_index[1]),
@@ -85,7 +85,7 @@ class GasFlowHistory:
             else:
                 # smoke started and has stoped in this period
                 info = {
-                    "id": self.gas_id,
+                    "id": self.gas_uuid,
                     "start time": self.start_time,
                     "stop time": self.stop_time,
                     "rate FCM": np.round(self.rate_FCS, 2),
