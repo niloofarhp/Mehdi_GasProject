@@ -95,7 +95,7 @@ class GasEmitDetect:
         fgbg = cv.createBackgroundSubtractorMOG2(history=500, detectShadows=False)
 
 
-        nf = 24                 # frame number of video to detect smoke
+        nf = 36                 # frame number of video to detect smoke
         nf_ovl = int(nf / 2)    # nf overlap
 
         smoke_check_frame = 224
@@ -274,7 +274,7 @@ class GasEmitDetect:
 
                             active_c = np.multiply(C > activation_thr, 1)
                             smoke_map = np.reshape(active_c, (nf, 224, 224))
-                            smoke_map = np.max(smoke_map[10:20, :, :], axis=0)
+                            smoke_map = np.max(smoke_map[2:nf-2, :, :], axis=0)
 
                             if smoke_check_frame != 224:
                                 smoke_map_scaled = cv.resize(np.uint8(smoke_map), (smoke_check_frame, smoke_check_frame))
