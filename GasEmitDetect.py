@@ -389,3 +389,28 @@ class GasEmitDetect:
             return True
         else:
             return False
+
+    # -----------------------------------------------------------------------
+    # Check Camera Contrast ------------------------------------------------
+    # -----------------------------------------------------------------------
+    def IsCamera_low_contrast(self, in_vid_addr):
+
+        capture = cv.VideoCapture(in_vid_addr)
+        num_frame = capture.get(cv.CAP_PROP_FRAME_COUNT)
+        fps = capture.get(cv.CAP_PROP_FPS)  #frame per secend
+        width = int(capture.get(3))
+        height = int(capture.get(4))
+
+        max_frm = int(2 * fps)
+        sum_low_contrast = 0
+
+        for f in range(max_frm):
+            ret, frame = capture.read()
+            result = exposure.is_low_contrast(frame)
+            if result:
+                sum_low_contrast += 1
+
+        if (sum_low_contrast > (max_frm/3)):
+            return True
+        else:
+            return False
