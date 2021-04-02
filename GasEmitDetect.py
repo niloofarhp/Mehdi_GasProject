@@ -12,6 +12,7 @@ import datetime
 from skimage import exposure
 
 DEBUG_MODE = False
+HALF_VIDEO_MODE = False
 
 class GasEmitDetect:
 
@@ -22,6 +23,9 @@ class GasEmitDetect:
         parallel = use_gpu
         rank = 0
         world_size = 1
+
+        if DEBUG_MODE:
+            parallel = False
 
         # Set learner and transform
         self.learner = I3dLearner(mode="rgb", use_cuda=use_cuda, parallel=parallel)
@@ -34,6 +38,26 @@ class GasEmitDetect:
 
         self.gas_region_hist = None
 
+
+    # -----------------------------------------------------------------------
+    # Contrast Limited Adaptive Histogram Equalization ----------------------
+    # -----------------------------------------------------------------------
+    def Normalize_CLAHE(self, img):
+        lab = cv.cvtColor(img, cv.COLOR_BGR2LAB)
+        l, a, b = cv.split(lab)
+        clahe = cv.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+        cl = clahe.apply(l)
+        limg = cv.merge((cl, a, b))
+        final = cv.cvtColor(limg, cv.COLOR_LAB2BGR)
+        return final
+
+    def Normalize_CLAHE_3d(self, vid):
+        f_count, h, w = vid.shape
+        big_img = vid.reshape(f_count*h, w)
+        clahe = cv.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+        big_img_norm = clahe.apply(big_img)
+        result = big_img_norm.reshape(f_count, h, w)
+        return result
 
     def cross_image(self, im1, im2):
         h,w = np.shape(im1)
@@ -58,9 +82,9 @@ class GasEmitDetect:
     # Gas Detect (from Video) -----------------------------------------------
     # -----------------------------------------------------------------------
     def DetectGasEmit_from_video(self, in_vid_addr, start_time, calc_flow_rate=False, out_vid_addr=None, full_resolution=True,
-                                 check_camera_vibration=False, tracking_mode=False):
+                                 min_time_detect=5, check_camera_vibration=False, tracking_mode=False):
         """
-         DetectGasEmit_from_video(in_vid_addr, calc_flow_rate, out_vid_addr, full_resolution, normalize_frame, tracking_mode) -> Gas-Emit-List
+         DetectGasEmit_from_video(in_vid_addr, calc_flow_rate, out_vid_addr, full_resolution, min_time_detect, tracking_mode) -> Gas-Emit-List
          .   @brief Sets a property in the VideoCapture.
          .
          .       @param in_vid_addr : input video address (string)
@@ -70,6 +94,7 @@ class GasEmitDetect:
          .       @param full_resolution : (True-> window size = 224x224,  False-> window size = min(height,width))
          .              full_resolution is safe for small gas emissions
          .       @param check_camera_vibration : (True-> detect and compensate camera vibration )
+         .       @param min_time_detect : minimum time to detect valid smoke (in second)
          .       @param tracking_mode : (True-> tracking mode, False-> Fixed camera)
          .       return
          .          Gas-Emit-List : list of Emitted Gas in frames
@@ -81,7 +106,23 @@ class GasEmitDetect:
         width = int(capture.get(3))
         height = int(capture.get(4))
 
-        print('video addr:',in_vid_addr, ' fps:',fps, ' frm-cnt:',num_frame, ' W:',width, ' H:',height)
+        # down-sample to decrease work time
+        fps_down_sample = int(np.round(fps / 10.0))
+        if fps_down_sample <= 0:
+            fps_down_sample = 1
+        num_frame = num_frame / fps_down_sample
+
+
+        self.min_time_detect = min_time_detect
+
+        nf = 36                 # frame number of video to detect smoke
+        nf_ovl = int(nf / 2)    # nf overlap
+
+
+        if HALF_VIDEO_MODE:
+            height = int(height / 2)
+
+        print('video info: ', in_vid_addr, ' fps: ', fps, 'frames count: ', num_frame, ' W:', width, ' H:', height)
         if num_frame < 1:
             print(f'{in_vid_addr} doesnt exist!')
             return
@@ -89,15 +130,13 @@ class GasEmitDetect:
         # initialize output video file
         if out_vid_addr is not None:
             fourcc = cv.VideoWriter_fourcc(*'mp4v')
-            out_video = cv.VideoWriter(out_vid_addr, fourcc, fps, (width, 2 * height))
+            out_video = cv.VideoWriter(out_vid_addr, fourcc, fps/ fps_down_sample, (width, 2 * height))
 
 
         #use MOG to fixed background
         fgbg = cv.createBackgroundSubtractorMOG2(history=500, detectShadows=False)
 
 
-        nf = 36                 # frame number of video to detect smoke
-        nf_ovl = int(nf / 2)    # nf overlap
 
         smoke_check_frame = 224
         if not full_resolution:
@@ -106,7 +145,7 @@ class GasEmitDetect:
 
 
         if calc_flow_rate:
-            gfr_obj = GasFlowRate(fps, nf)
+            gfr_obj = GasFlowRate(fps, fps_down_sample, nf, self.min_time_detect)
 
 
         rgb_4d = np.zeros((nf, height, width, 3), dtype=np.float32)
@@ -125,6 +164,11 @@ class GasEmitDetect:
                     frame = all_frames[nf - nf_ovl + f]
                 else:
                     ret, frame = capture.read()
+                    if fps_down_sample > 1:
+                        for d in range(fps_down_sample-1):
+                            capture.read()
+                    if HALF_VIDEO_MODE:
+                        frame = frame[0:height,:,:]
 
                 all_frames[f, :, :, :] = frame
 
@@ -141,6 +185,11 @@ class GasEmitDetect:
                 # convert video frame to gray-scaled
                 gray_frames[f,:,:] = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
 
+            if False:#normalize_frame:
+                gray_frames = self.Normalize_CLAHE_3d(gray_frames)
+                for f in range(nf):
+                    img_rgb = cv.cvtColor(gray_frames[f,:,:], cv.COLOR_GRAY2RGB)
+                    rgb_4d[f, :, :, :] = img_rgb
 
             if check_camera_vibration:
                 for f in range(nf):
@@ -321,7 +370,7 @@ class GasEmitDetect:
             gfr_result = []
             if calc_flow_rate:
                 # gfr_obj.ClacGasFlowRate(np.uint8(rgb_4d_smoke[f]))
-                cur_time = start_time + datetime.timedelta(milliseconds=int(org_frm * 1000.0 / fps))
+                cur_time = start_time + datetime.timedelta(milliseconds=int(org_frm * fps_down_sample * 1000.0 / fps))
                 gfr_result = gfr_obj.CalcGasFlowRate(cur_time, gray_frames, np.uint8(rgb_4d_smoke[nf - 1, :, :, 2]))
 
 
