@@ -9,10 +9,12 @@ from GasFlowHistory import GasFlowHistory
 
 class GasFlowRate:
 
-    def __init__(self, fps, nf):
+    def __init__(self, fps, fps_down_sample, nf, min_time_detect):
 
         self.fps = fps
+        self.fps_down_sample = fps_down_sample
         self.nf = nf
+        self.min_time_detect = min_time_detect
 
         self.fgbg = cv.createBackgroundSubtractorMOG2()
         self.prev_gray = None
@@ -107,7 +109,7 @@ class GasFlowRate:
             if GasFlowHistObj is not None:
                 GasFlowHistObj.AddToThisRegion(abs_contour, rate_FCS)
             else:
-                new_GasFlowHistObj = GasFlowHistory(self.fps, self.nf, np.shape(abs_contour), global_frame_time)
+                new_GasFlowHistObj = GasFlowHistory(self.fps, self.fps_down_sample , int(self.nf / 2), np.shape(abs_contour), global_frame_time, self.min_time_detect)
                 new_GasFlowHistObj.AddToThisRegion(abs_contour, rate_FCS)
                 self.GasFlowHistList.append(new_GasFlowHistObj)
 
