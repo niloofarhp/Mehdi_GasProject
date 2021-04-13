@@ -10,6 +10,7 @@ from grad_cam_viz import GradCam
 from i3d_learner import I3dLearner
 import datetime
 from skimage import exposure
+#from memory_profiler import profile
 
 DEBUG_MODE = False
 HALF_VIDEO_MODE = False
@@ -81,6 +82,7 @@ class GasEmitDetect:
     # -----------------------------------------------------------------------
     # Gas Detect (from Video) -----------------------------------------------
     # -----------------------------------------------------------------------
+    #@profile
     def DetectGasEmit_from_video(self, in_vid_addr, start_time, calc_flow_rate=False, out_vid_addr=None, full_resolution=True,
                                  min_time_detect=5, check_camera_vibration=False, tracking_mode=False):
         """
@@ -148,48 +150,41 @@ class GasEmitDetect:
             gfr_obj = GasFlowRate(fps, fps_down_sample, nf, self.min_time_detect)
 
 
-        rgb_4d = np.zeros((nf, height, width, 3), dtype=np.float32)
         all_frames = np.zeros((nf, height, width, 3), dtype=np.uint8)
+        cur_frame = None
+        rgb_4d = np.zeros((nf, height, width, 3), dtype=np.uint8)
         all_frames_comp = np.zeros((nf, height, width, 3), dtype=np.uint8)
         gray_frames = np.zeros((nf, height, width), dtype=np.uint8)
-        frame_act_3d = np.zeros([nf, height, width])
-        shift_frame_acc = np.zeros([nf, 2])
+        frame_act_3d = np.zeros((nf, height, width))
+        shift_frame_acc = np.zeros((nf, 2))
+
 
         gas_emit_report = []
 
         for org_frm in range(0, int(num_frame - nf - nf_ovl), nf - nf_ovl):
 
+            rgb_4d_smoke = np.zeros([nf, height, width, 3], dtype=np.uint8)
+
             for f in range(nf):
                 if (org_frm != 0) and (f < nf_ovl):
-                    frame = all_frames[nf - nf_ovl + f]
+                    cur_frame = all_frames[nf - nf_ovl + f]
                 else:
-                    ret, frame = capture.read()
+                    ret, cur_frame = capture.read()
                     if fps_down_sample > 1:
                         for d in range(fps_down_sample-1):
                             capture.read()
                     if HALF_VIDEO_MODE:
-                        frame = frame[0:height,:,:]
+                        cur_frame = cur_frame[0:height,:,:]
 
-                all_frames[f, :, :, :] = frame
+                all_frames[f, :, :, :] = cur_frame
 
                 # convert video frame to RGB
-                img_rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
-                #if normalize_frame:
-                #    img_rgb = self.Normalize_CLAHE(img_rgb)
-
-                #cv.imshow('img_rgb', img_rgb)
-                #cv.imshow('Normalize', self.Normalize_CLAHE(img_rgb))
-
-                rgb_4d[f, :, :, :] = img_rgb
+                rgb_4d[f, :, :, :] = cv.cvtColor(cur_frame, cv.COLOR_BGR2RGB)
 
                 # convert video frame to gray-scaled
-                gray_frames[f,:,:] = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+                gray_frames[f,:,:] = cv.cvtColor(cur_frame, cv.COLOR_BGR2GRAY)
 
-            if False:#normalize_frame:
-                gray_frames = self.Normalize_CLAHE_3d(gray_frames)
-                for f in range(nf):
-                    img_rgb = cv.cvtColor(gray_frames[f,:,:], cv.COLOR_GRAY2RGB)
-                    rgb_4d[f, :, :, :] = img_rgb
+                del cur_frame
 
             if check_camera_vibration:
                 for f in range(nf):
@@ -201,8 +196,7 @@ class GasEmitDetect:
                         t = np.float32(matrix)
                         frame = cv.warpAffine(all_frames[f, :, :, :], t, (width, height))
                         all_frames_comp[f, :, :, :] = frame
-                        img_rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
-                        rgb_4d[f, :, :, :] = img_rgb
+                        rgb_4d[f, :, :, :] = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
                         gray_frames[f, :, :] = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
                     else:
                         all_frames_comp[f, :, :, :] = all_frames[f, :, :, :]
@@ -218,8 +212,10 @@ class GasEmitDetect:
                 fgmask = cv.erode(fgmask, kernel2)
                 fgmask = cv.dilate(fgmask, kernel1)
                 frame_act_3d[f, :, :] = fgmask
+                del fgmask
 
             frame_act_2d = np.mean(frame_act_3d, axis=0)
+
 
             #---------------------------------------------------
             #--- tracking mode ---------------------------------
@@ -278,7 +274,6 @@ class GasEmitDetect:
             smoke_thr = 0.6
             activation_thr = 0.85
 
-            rgb_4d_smoke = np.zeros([nf, height, width, 3], dtype=np.uint8)
 
             w_step = int(np.ceil(1.4 * (width / smoke_check_frame - 1) + 1))
             h_step = int(np.ceil(1.4 * (height / smoke_check_frame - 1) + 1))
@@ -336,6 +331,10 @@ class GasEmitDetect:
                                     rgb_4d_smoke[f, y1:y2, x1:x2, 2],
                                     np.uint8(255 * smoke_map_scaled[:, :] * pred_upsample[f]))  # * abs_sel[f,:,:]))
 
+                            # --- release local parameters
+                            del C
+                            del active_c
+                            del smoke_map
 
                             # ---------------------------------------------------
                             # tracking mode (reverse tracked frames) ------------
@@ -367,6 +366,17 @@ class GasEmitDetect:
                             rgb_4d_smoke[:, y2 - 1, x1:x2, 1] = np.uint8(255 * np.ones([nf, x2 - x1]))
                             found_and_smoke = True
 
+
+                        del selected_zone
+                        del v
+                        del pred_pre
+                        del pred_upsample_pre
+                        del pred
+                        del pred_upsample
+                        del smoke_pb
+
+            del frame_act_2d
+
             gfr_result = []
             if calc_flow_rate:
                 # gfr_obj.ClacGasFlowRate(np.uint8(rgb_4d_smoke[f]))
@@ -397,6 +407,8 @@ class GasEmitDetect:
 
                     all = np.concatenate((all_frames[f], merge_frame), axis=0)
                     out_video.write(all)
+                    del merge_frame
+                    del all
 
             if DEBUG_MODE:
                 #cv.imshow('all', all)
@@ -408,8 +420,27 @@ class GasEmitDetect:
             out_video.release()
         cv.destroyAllWindows()
 
+
         if calc_flow_rate:
             gas_emit_report = gfr_obj.Get_AllGas_report()
+
+
+        # ----------------------------------------------
+        # Release All Arrays ---------------------------
+        # ----------------------------------------------
+        del frame_act_3d
+
+        del rgb_4d
+        del all_frames
+        del all_frames_comp
+        del gray_frames
+        del shift_frame_acc
+        del rgb_4d_smoke
+        del fgbg
+
+        if calc_flow_rate:
+            del gfr_obj
+
         return gas_emit_report
 
     # -----------------------------------------------------------------------
