@@ -60,6 +60,9 @@ class GasFlowHistory:
             kernel2 = np.ones((k2, k2)) / (k2*k2)
             dst2 = cv.filter2D(self.last_gas_region_mean, -1, kernel2)
             same = np.sum(dst1 * dst2)
+
+            del dst1
+            del dst2
         return same
 
     def AddToThisRegion(self, gas_region, cur_rate_FCS):
