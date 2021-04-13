@@ -22,6 +22,14 @@ class GasFlowRate:
         self.rate_FCS = None
         self.GasFlowHistList = []
 
+    def __del__(self):
+        del self.fgbg
+        del self.prev_gray
+        del self.gas_flow_rate_hist
+        del self.rate_FCS
+        for gfh in self.GasFlowHistList:
+            del gfh
+
     def CalcGasFlowRate(self, global_frame_time, gray_frames, bin_gas_region, flow_method_median=True):
 
         step = 6
@@ -41,6 +49,7 @@ class GasFlowRate:
             gfh.IncreaseTimeStep(global_frame_time)
 
         result_list = []
+        abs_contour = None
         for contour in contours:
             abs_contour = np.zeros_like(bin_gas_region)
             abs_contour = cv.drawContours(abs_contour, [contour], -1, 1, thickness=-1)
@@ -113,6 +122,8 @@ class GasFlowRate:
                 new_GasFlowHistObj.AddToThisRegion(abs_contour, rate_FCS)
                 self.GasFlowHistList.append(new_GasFlowHistObj)
 
+        del contours
+        del abs_contour
         return result_list
 
     def Get_AllGas_report(self):
